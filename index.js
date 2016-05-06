@@ -51,20 +51,28 @@ function acquireLock(file, options, callback) {
 
                 return callback(err);
             }
-
-            if (stat.mtime.getTime() >= Date.now() - options.stale) {
-                return callback(errcode('Lock file is already being hold', 'ELOCKED', { file: file }));
-            }
-
-            // If it's stale, remove it and try again!
-            // Skip stale check to avoid recursiveness
-            removeLock(file, options, function (err) {
-                if (err) {
-                    return callback(err);
+              if (stat.mtime.getTime() >= Date.now() - options.stale) {
+                  return callback(errcode('Lock file is already being hold', 'ELOCKED', { file: file }));
+              }
+              // if lock is stale wait a few seconds to double check.
+              // this is to allow for the case when a computer is coming back from sleep and hasn't had the
+              // chance to update/touch the timestamp of the lock
+              setTimeout(function() {
+                var stat = options.fs.statSync(getLockFile(file));
+                if (stat.mtime.getTime() >= Date.now() - options.stale) {
+                    return callback(errcode('Lock file is already being hold', 'ELOCKED', { file: file }));
                 }
 
-                acquireLock(file, extend({}, options, { stale: 0 }), callback);
-            });
+              // If it's still stale, remove it and try again!
+              // Skip stale check to avoid recursiveness
+              removeLock(file, options, function (err) {
+                  if (err) {
+                      return callback(err);
+                  }
+
+                  acquireLock(file, extend({}, options, { stale: 0 }), callback);
+              });
+            }, options.stale/2)
         });
     });
 }
@@ -99,14 +107,14 @@ function updateLock(file, options) {
             if (lock.released) {
                 return;
             }
-
+            // not needed... breaks shit
             // Verify if we are within the stale threshold
-            if (lock.lastUpdate <= Date.now() - options.stale &&
-                lock.lastUpdate > Date.now() - options.stale * 2) {
-                return compromisedLock(file, lock,
-                    errcode(lock.updateError || 'Unable to update lock within the stale threshold', 'ECOMPROMISED'));
-            }
-
+            // if (lock.lastUpdate <= Date.now() - options.stale &&
+            //     lock.lastUpdate > Date.now() - options.stale * 2) {
+            //     return compromisedLock(file, lock,
+            //         errcode(lock.updateError || 'Unable to update lock within the stale threshold', 'ECOMPROMISED'));
+            // }
+            // not needed... breaks shit
             // If the file is older than (stale * 2), we assume the clock is moved manually,
             // which we consider a valid case
 
@@ -133,7 +141,8 @@ function updateLock(file, options) {
     // Unref the timer so that the nodejs process can exit freely
     // This is safe because all acquired locks will be automatically released
     // on process exit
-    lock.updateTimeout.unref();
+    // breaks in atom/browser JS
+    // lock.updateTimeout.unref();
 }
 
 function compromisedLock(file, lock, err) {
