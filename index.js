@@ -134,7 +134,7 @@ function updateLock(file, options) {
           lock.lastUpdate = Date.now();
           lock.updateError = null;
           lock.updateDelay = null;
-          console.log('holding lock');
+          // console.log('holding lock');
           updateLock(file, options);
         });
     }, lock.updateDelay);
